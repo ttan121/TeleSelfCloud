@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TeleSelfCloud.Core/TeleSelfCloud.Core.csproj" />
+    <Project Path="src/TeleSelfCloud.Desktop/TeleSelfCloud.Desktop.csproj" />
+    <Project Path="src/TeleSelfCloud.Infrastructure/TeleSelfCloud.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TeleSelfCloud.Tests/TeleSelfCloud.Tests.csproj" />
+    <Project Path="tests/TeleSelfCloud.LiveAcceptance/TeleSelfCloud.LiveAcceptance.csproj" />
+    <Project Path="tests/TeleSelfCloud.ProfileLeaseProbe/TeleSelfCloud.ProfileLeaseProbe.csproj" />
+    <Project Path="tests/TeleSelfCloud.SqliteCipherProbe/TeleSelfCloud.SqliteCipherProbe.csproj" />
+  </Folder>
+</Solution>

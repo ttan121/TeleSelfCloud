@@ -1,0 +1,5 @@
+# TDLib native runtime (Windows x64)
+
+The application obtains `tdjson.dll` and its companion `z.dll` from the pinned `TDLib.Native.win-x64` NuGet package (TDLib 1.8.67). NuGet copies the Windows x64 runtime assets into build and publish output. The package is maintained by the community project `ForNeVeR/tdlib.native`, not distributed directly by Telegram. Its nuspec at repository commit `375f593d6b3602fa723caf2d83cf3ba250af97ca` declares `BSL-1.0 AND Apache-2.0 AND Zlib`; the nupkg contains a BSL license file but does not include separate Apache or Zlib text files. A release package still needs a complete third-party notice bundle. Keep the native runtime version pinned.
+
+The package documents that its Windows binary requires the Microsoft Visual C++ Redistributable 2019 or newer. The app targets `win-x64` so NuGet selects the matching native assets. The self-contained publish output includes TDLib, zlib, OpenSSL and SQLite native DLLs alongside the .NET runtime, but does not install the Visual C++ Redistributable.
