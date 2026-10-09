@@ -2243,6 +2243,37 @@ public partial class MainWindow : Window
 		UploadToolbar.Visibility = _chosenUploadPaths.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
 	}
 
+	private void PartSizeSelector_Click(object sender, RoutedEventArgs e)
+	{
+		if (!_operationBusy && !_shutdownStarted)
+			PartSizePopup.IsOpen = true;
+	}
+
+	private void PartSizeChoice_Click(object sender, RoutedEventArgs e)
+	{
+		if (sender is not Button button) return;
+		var value = button.Tag?.ToString() == "default"
+			? 128
+			: int.TryParse(button.Tag?.ToString(), NumberStyles.None, CultureInfo.InvariantCulture, out var selected) ? selected : 0;
+		if (value <= 0) return;
+
+		PartSizeBox.Text = value.ToString(CultureInfo.InvariantCulture);
+		PartSizeBox.Visibility = Visibility.Collapsed;
+		PartSizeSelectorButton.Content = button.Tag?.ToString() == "default"
+			? "128 MiB ⌄"
+			: $"{value} MiB ⌄";
+		PartSizePopup.IsOpen = false;
+	}
+
+	private void PartSizeCustom_Click(object sender, RoutedEventArgs e)
+	{
+		PartSizeBox.Visibility = Visibility.Visible;
+		PartSizeSelectorButton.Content = UiText.Instance.Get("upload.partSizeCustom") + " ⌄";
+		PartSizePopup.IsOpen = false;
+		PartSizeBox.Focus();
+		PartSizeBox.SelectAll();
+	}
+
 	private void CloseUploadSelection_Click(object sender, RoutedEventArgs e)
 	{
 		if (_operationBusy || _shutdownStarted) return;
@@ -2915,6 +2946,54 @@ public partial class MainWindow : Window
 		catch (Exception ex)
 		{
 			StatusText.Text = "Could not cancel the queued item: " + ex.Message;
+		}
+		finally
+		{
+			SetBusy(busy: false);
+		}
+	}
+
+	private static bool IsStoppedQueueState(TransferQueueState state) =>
+		state is TransferQueueState.Pending or TransferQueueState.Paused or TransferQueueState.Failed;
+
+	private async void CancelStoppedTransfers_Click(object sender, RoutedEventArgs e)
+	{
+		if (RejectLegacyLocalDataMutation() || _operationBusy || _shutdownStarted) return;
+		var candidateTaskIds = _queueViews.Values
+			.Where(view => IsStoppedQueueState(view.Item.State))
+			.Select(view => view.Item.TaskId)
+			.ToHashSet(StringComparer.Ordinal);
+		if (candidateTaskIds.Count == 0) return;
+
+		var confirmation = string.Format(CultureInfo.CurrentCulture,
+			UiText.Instance.Get("queue.cancelStoppedConfirm"), candidateTaskIds.Count);
+		if (MessageBox.Show(this, confirmation, UiText.Instance.Get("queue.cancelStopped"),
+			MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+			return;
+
+		SetBusy(busy: true, UiText.Instance.Get("queue.cancelStoppedWorking"), canCancel: false);
+		var cancelled = 0;
+		var failed = 0;
+		try
+		{
+			var latest = await _transferQueueStore.ListAsync(CancellationToken.None);
+			foreach (var item in latest.Where(item => candidateTaskIds.Contains(item.TaskId) && IsStoppedQueueState(item.State)))
+			{
+				try
+				{
+					await _transferQueueStore.SetStateAsync(item.TaskId, TransferQueueState.Cancelled, null, CancellationToken.None);
+					cancelled++;
+				}
+				catch { failed++; }
+			}
+			await RefreshQueueAsync();
+			StatusText.Text = string.Format(CultureInfo.CurrentCulture,
+				UiText.Instance.Get("queue.cancelStoppedResult"), cancelled, failed);
+		}
+		catch (Exception ex)
+		{
+			StatusText.Text = "Could not cancel stopped transfers: " + ex.Message;
+			try { await RefreshQueueAsync(); } catch { }
 		}
 		finally
 		{
@@ -4180,6 +4259,7 @@ public partial class MainWindow : Window
 			UploadButton.IsEnabled = !busy && !_shutdownStarted;
 		}
 		PartSizeBox.IsEnabled = !busy && !_shutdownStarted;
+		PartSizeSelectorButton.IsEnabled = !busy && !_shutdownStarted;
 		ForceMultipartCheck.IsEnabled = !busy && !_shutdownStarted;
         ApplyDedupAvailability();
 		ManifestList.IsEnabled = !busy && !_shutdownStarted;
@@ -4384,6 +4464,8 @@ public partial class MainWindow : Window
 				return (uint)(state - 4) <= 1u;
 			});
 		}
+		if (QueueCancelStoppedButton != null)
+			QueueCancelStoppedButton.IsEnabled = flag8 && _queueViews.Values.Any(view => IsStoppedQueueState(view.Item.State));
         ApplyCopyFallbackAvailability();
 		ApplyLegacyLocalDataViewRestrictions();
 		return;

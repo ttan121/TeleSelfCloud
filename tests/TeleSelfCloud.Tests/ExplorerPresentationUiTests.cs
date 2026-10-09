@@ -19,6 +19,61 @@ public sealed class ExplorerPresentationUiTests
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
 
     [Theory]
+    [InlineData("vi", false, 1200)]
+    [InlineData("vi", true, 760)]
+    [InlineData("en", false, 760)]
+    [InlineData("en", true, 1200)]
+    public void FilterDropdownsFollowThemeAndKeepFocusAndSelectionAcrossNavigation(string language, bool dark, int width)
+    {
+        Fixture(language, (window, root) =>
+        {
+            Call(window, "ApplyTheme", dark);
+            window.Width = width; window.Height = 760; window.Show(); window.UpdateLayout();
+            foreach (var name in new[] { "SortBox", "FilterBox", "TypeFilterBox", "FilesScopeBox" })
+            {
+                var combo = (ComboBox)window.FindName(name);
+                Assert.False(string.IsNullOrWhiteSpace(AutomationProperties.GetName(combo)));
+                Assert.Equal(((SolidColorBrush)window.Resources["SurfaceContainer"]).Color, ((SolidColorBrush)combo.Background).Color);
+                Assert.True(Contrast((SolidColorBrush)combo.Foreground, (SolidColorBrush)combo.Background) >= 4.5);
+                var before = combo.SelectedIndex;
+                Keyboard.Focus(combo); window.UpdateLayout();
+                Assert.True(combo.IsKeyboardFocusWithin);
+                var toggle = (System.Windows.Controls.Primitives.ToggleButton)combo.Template.FindName("DropDownToggle", combo);
+                var border = (Border)toggle.Template.FindName("ComboBorder", toggle);
+                Assert.Equal(((SolidColorBrush)window.Resources["AccentBlue"]).Color, ((SolidColorBrush)border.BorderBrush).Color);
+                combo.IsDropDownOpen = true; window.UpdateLayout();
+                var popup = (System.Windows.Controls.Primitives.Popup)combo.Template.FindName("PART_Popup", combo);
+                ((FrameworkElement)popup.Child).UpdateLayout();
+                Assert.True(popup.IsOpen);
+                var option = (ComboBoxItem)combo.ItemContainerGenerator.ContainerFromIndex(before);
+                var optionBorder = (Border)option.Template.FindName("ItemBackground", option);
+                Assert.Equal(((SolidColorBrush)window.Resources["SelectionBackground"]).Color, ((SolidColorBrush)optionBorder.Background).Color);
+                Assert.True(Contrast((SolidColorBrush)option.Foreground, (SolidColorBrush)optionBorder.Background) >= 4.5);
+                option.Focus(); window.UpdateLayout();
+                Assert.True(option.IsKeyboardFocusWithin);
+                Assert.Equal(((SolidColorBrush)window.Resources["AccentBlue"]).Color, ((SolidColorBrush)optionBorder.BorderBrush).Color);
+                Capture((FrameworkElement)popup.Child, $"filter-popup-{name}-{language}-{dark}-{width}");
+                ((ComboBoxItem)combo.ItemContainerGenerator.ContainerFromIndex(before + 1)).IsSelected = true;
+                combo.IsDropDownOpen = false;
+                Assert.Equal(before + 1, combo.SelectedIndex);
+                combo.IsEnabled = false; window.UpdateLayout();
+                Assert.Equal(((SolidColorBrush)window.Resources["TextMuted"]).Color, ((SolidColorBrush)combo.Foreground).Color);
+                combo.IsEnabled = true; combo.SelectedIndex = before;
+            }
+            var filters = (WrapPanel)window.FindName("FilesFilterControls");
+            var primary = (WrapPanel)window.FindName("FilesPrimaryControls");
+            Assert.True(filters.TranslatePoint(new Point(), window).Y >= primary.TranslatePoint(new Point(), window).Y + primary.ActualHeight);
+            Capture(window, $"toolbar-{language}-{dark}-{width}");
+            Call(window, "NavigateToPage", "settings"); window.UpdateLayout();
+            Assert.Equal(Visibility.Collapsed, filters.Visibility);
+            Capture(window, $"settings-{language}-{dark}-{width}");
+            Call(window, "NavigateToPage", "files"); window.UpdateLayout();
+            Assert.Equal(Visibility.Visible, filters.Visibility);
+            Assert.Equal(0, ((ComboBox)window.FindName("SortBox")).SelectedIndex);
+        });
+    }
+
+    [Theory]
     [InlineData("vi")]
     [InlineData("en")]
     public void AllFilesIncludesNestedFoldersWhileFolderSelectionKeepsItsOwnScope(string language)

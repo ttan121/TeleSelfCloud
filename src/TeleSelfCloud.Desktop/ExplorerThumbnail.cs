@@ -66,6 +66,13 @@ public sealed class ExplorerThumbnail : Image
 
     private static BitmapSource? Decode(FileManifest manifest, CancellationToken token)
     {
+        // A missing/stale staging path is common for cloud-only files. Check it before
+        // allocating a payload buffer so scrolling cannot allocate 32 MiB per missing tile.
+        foreach (var part in manifest.Parts)
+        {
+            token.ThrowIfCancellationRequested();
+            if (new FileInfo(part.StagingPath!).Length != part.Length) return null;
+        }
         var bytes = new byte[(int)manifest.LogicalSize];
         var offset = 0;
         foreach (var part in manifest.Parts)
